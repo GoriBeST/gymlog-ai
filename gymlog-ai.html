@@ -260,10 +260,16 @@ header {
 
     <!-- 手動入力モード -->
     <div id="training-manual">
-      <!-- 日付 -->
+      <!-- 日付 + 自動提案トグル -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <span style="font-size:12px;color:var(--text2);">記録日</span>
         <span id="training-date-display" style="font-size:13px;font-weight:500;color:var(--text);font-family:'DM Mono',monospace;cursor:pointer;" onclick="editTrainingDate()"></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:var(--text3);">前回提案</span>
+          <div onclick="toggleSuggestion()" id="suggest-toggle"
+            style="width:36px;height:20px;border-radius:20px;background:var(--gold);cursor:pointer;position:relative;transition:background .2s;">
+            <div id="suggest-knob" style="position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:right .2s;"></div>
+          </div>
+        </div>
       </div>
 
       <!-- 分割法タブ -->
@@ -343,6 +349,7 @@ header {
       <button class="btn-main" id="btn-meal2" onclick="analyzeMeal()" style="margin-top:10px;">🧠 PFCを計算・保存する</button>
     </div>
     <div id="result-meal"></div>
+    <div id="meal-advice" style="margin-top:8px;"></div>
 
     <div class="card" style="margin-top:20px;">
       <div class="card-title">目標PFC を自動計算</div>
@@ -470,6 +477,8 @@ function loadAll(){
   setGoalMode(calcGoalMode, false);
   setActivity(calcActivity, false);
   calcPFC();
+  const savedSuggest=lsGet('gl-suggest-on');
+  if(savedSuggest===false){ suggestionOn=false; }
   initTrainingManual();
 }
 
@@ -821,6 +830,14 @@ function renderMealResult(data, saved){
 
   renderTodayMeals(d);
   pushInstaCard({type:'meal', data:{...data,timeStr}, idx:mealHistory.length-1});
+  // ② 食事アドバイス
+  const advices=getMealAdvice(data);
+  if(advices.length>0){
+    setTimeout(()=>{
+      const advEl=document.getElementById('meal-advice');
+      if(advEl) advEl.innerHTML=advices.map(a=>`<div style="padding:6px 10px;margin-bottom:4px;background:rgba(201,168,76,0.08);border-radius:var(--radius);border-left:2px solid var(--gold);font-size:12px;color:var(--text2);">${a}</div>`).join('');
+    },300);
+  }
 }
 
 function renderTodayMeals(d){
@@ -1168,12 +1185,44 @@ function setTrainingMode(mode){
   ob.style.cssText+=`;border:${!isM?'2px solid var(--gold)':'0.5px solid var(--border2)'};background:${!isM?'rgba(201,168,76,0.1)':'var(--bg3)'};color:${!isM?'var(--gold)':'var(--text2)'};font-weight:${!isM?700:400}`;
 }
 function editTrainingDate(){
-  const d=prompt('記録日 (YYYY-MM-DD)',trainingInputDate);
-  if(d&&/^\d{4}-\d{2}-\d{2}$/.test(d)){
-    trainingInputDate=d;
-    document.getElementById('training-date-display').textContent=d.slice(5).replace('-','/');
-    renderTodayTrainingLog();
-  }
+  // 日付変更モーダル表示
+  const cur=trainingInputDate.split('-');
+  const y=parseInt(cur[0]), m=parseInt(cur[1]), d=parseInt(cur[2]);
+  const now=new Date(new Date().getTime()+9*60*60*1000);
+  const curY=now.getFullYear();
+  const yOpts=[];
+  for(let i=curY-1;i<=curY;i++) yOpts.push(`<option value="${i}" ${i===y?'selected':''}>${i}年</option>`);
+  const mOpts=Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${i+1}月</option>`).join('');
+  const dOpts=Array.from({length:31},(_,i)=>`<option value="${i+1}" ${i+1===d?'selected':''}>${i+1}日</option>`).join('');
+  // 既存モーダル削除
+  const old=document.getElementById('date-modal');
+  if(old) old.remove();
+  const modal=document.createElement('div');
+  modal.id='date-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML=`<div style="background:var(--bg2);border-radius:var(--radius-lg);padding:20px;width:100%;max-width:320px;border:0.5px solid var(--border2);">
+    <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:14px;">記録日を変更</div>
+    <div style="display:grid;grid-template-columns:2fr 1.5fr 1.5fr;gap:8px;margin-bottom:16px;">
+      <select id="dm-y" style="padding:8px;font-size:14px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);">${yOpts.join('')}</select>
+      <select id="dm-m" style="padding:8px;font-size:14px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);">${mOpts}</select>
+      <select id="dm-d" style="padding:8px;font-size:14px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);">${dOpts}</select>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="document.getElementById('date-modal').remove()" style="flex:1;padding:10px;border-radius:var(--radius);background:var(--bg3);color:var(--text2);border:0.5px solid var(--border2);cursor:pointer;font-size:13px;">キャンセル</button>
+      <button onclick="applyTrainingDate()" style="flex:1;padding:10px;border-radius:var(--radius);background:var(--gold);color:#000;border:none;cursor:pointer;font-size:13px;font-weight:700;">決定</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+function applyTrainingDate(){
+  const y=document.getElementById('dm-y')?.value;
+  const m=String(document.getElementById('dm-m')?.value).padStart(2,'0');
+  const d=String(document.getElementById('dm-d')?.value).padStart(2,'0');
+  if(!y||!m||!d) return;
+  trainingInputDate=`${y}-${m}-${d}`;
+  document.getElementById('training-date-display').textContent=trainingInputDate.slice(5).replace('-','/');
+  document.getElementById('date-modal')?.remove();
+  renderTodayTrainingLog();
 }
 function renderMuscleGroupBtns(){
   const el=document.getElementById('muscle-group-btns');
@@ -1289,11 +1338,13 @@ function renderSetsArea(){
         <button onclick="removeSet(${ei},${si})" style="width:32px;height:32px;border-radius:50%;background:rgba(232,85,85,0.15);color:var(--red);border:none;cursor:pointer;font-size:16px;flex-shrink:0;">×</button>
       </div>`).join('');
     const subBadge=ex.sub?`<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:${(SUB_COLORS[ex.sub]||'#888')}22;color:${SUB_COLORS[ex.sub]||'#888'};border:0.5px solid ${SUB_COLORS[ex.sub]||'#888'};margin-left:6px;">${ex.sub}</span>`:'';
+    const suggHTML=getSuggestionHTML(ex.name, ei);
     return `<div class="card" style="margin-bottom:12px;border-left:3px solid ${color};">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <div><span style="font-size:15px;font-weight:700;color:var(--text);">${ex.name}</span>${subBadge}${pmHTML}</div>
         <button onclick="removeExercise(${ei})" style="font-size:11px;padding:3px 8px;border-radius:20px;background:rgba(232,85,85,0.12);color:var(--red);border:0.5px solid rgba(232,85,85,0.3);cursor:pointer;">削除</button>
       </div>
+      ${suggHTML}
       ${sHTML}
       <button onclick="addSet(${ei})" style="width:100%;padding:9px;border-radius:var(--radius);border:1px dashed var(--border2);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;margin-top:4px;">+ セットを追加</button>
     </div>`;
@@ -1435,6 +1486,103 @@ function renderTodayTrainingLog(){
       <button onclick="applyEditPanel('td',${JSON.stringify(realIdxArr)},'today-edit','today')" style="width:100%;padding:9px;background:var(--gold);color:#000;border:none;border-radius:var(--radius);font-size:13px;font-weight:700;cursor:pointer;">✓ 修正を適用</button>
     </div>
   </div>`;
+}
+
+// ── ③ 次回トレーニング自動提案 ──
+let suggestionOn=true;
+function toggleSuggestion(){
+  suggestionOn=!suggestionOn;
+  const knob=document.getElementById('suggest-knob');
+  const toggle=document.getElementById('suggest-toggle');
+  if(knob){ knob.style.right=suggestionOn?'2px':'18px'; }
+  if(toggle){ toggle.style.background=suggestionOn?'var(--gold)':'var(--bg3)'; }
+  lsSet('gl-suggest-on',suggestionOn);
+}
+function getLastSession(exName){
+  // 同じ種目の直近セッションを返す
+  for(let i=trainingHistory.length-1;i>=0;i--){
+    const s=trainingHistory[i];
+    const ex=(s.exercises||[]).find(e=>e.name===exName);
+    if(ex) return {date:s.date,sets:ex.sets};
+  }
+  return null;
+}
+function getSuggestionHTML(exName, fi){
+  if(!suggestionOn) return '';
+  const last=getLastSession(exName);
+  if(!last) return '';
+  // data属性にJSONを安全に格納
+  const dataId='sugg-'+fi;
+  window._suggData=window._suggData||{};
+  window._suggData[dataId]={name:exName, sets:last.sets};
+  return `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;margin-bottom:8px;padding:6px 10px;background:rgba(201,168,76,0.08);border-radius:var(--radius);border-left:2px solid var(--gold);">
+    <span style="font-size:11px;color:var(--gold);">前回</span>
+    <span style="font-size:12px;color:var(--text2);font-family:'DM Mono',monospace;">${last.date.slice(5)}　${last.sets.map(s=>`${s.weight}×${s.reps}`).join(' / ')}</span>
+    <button onclick="applyLastSession('${dataId}')" style="margin-left:auto;font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(201,168,76,0.2);color:var(--gold);border:0.5px solid var(--gold);cursor:pointer;flex-shrink:0;">使う</button>
+  </div>`;
+}
+function applyLastSession(dataId){
+  const d=window._suggData?.[dataId];
+  if(!d) return;
+  const idx=selectedExercises.findIndex(e=>e.name===d.name);
+  if(idx<0) return;
+  selectedExercises[idx].sets=d.sets.map(s=>({weight:s.weight,reps:s.reps}));
+  renderSetsArea();
+}
+
+// ── ① AI分析アドバイス ──
+async function runAIAnalysis(){
+  const btn=document.getElementById('ai-analysis-btn');
+  const resultEl=document.getElementById('ai-analysis-result');
+  if(!resultEl) return;
+  if(trainingHistory.length<3){
+    resultEl.innerHTML=`<div style="font-size:13px;color:var(--text2);padding:8px;background:var(--bg3);border-radius:var(--radius);">📊 まだデータが少ないです。2週間分の記録が溜まるとより正確な分析ができます。</div>`;
+    return;
+  }
+  btn.disabled=true;
+  resultEl.innerHTML='<div class="loading"><span class="spin"></span>分析中...</div>';
+  try{
+    const key=getKey();
+    if(!key) throw new Error('APIキーが未設定です');
+    // 直近30件のトレーニングサマリーを作成
+    const recent=[...trainingHistory].sort((a,b)=>b.savedAt-a.savedAt).slice(0,30);
+    const summary=recent.map(s=>`${s.date} [${s.muscleGroup||''}] ${(s.exercises||[]).map(e=>`${e.name}:${e.sets.map(st=>`${st.weight}×${st.reps}`).join(',')}`).join(' | ')}`).join('\n');
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,
+        messages:[{role:'user',content:`以下は筋トレ記録です。日本語で簡潔に3点だけ分析してください：①停滞している種目、②部位の偏り、③先週と今週の比較。各50字以内で。\n\n${summary}`}]})
+    });
+    const data=await res.json();
+    const text=data.content.map(b=>b.text||'').join('');
+    const html=text
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\n/g,'<br>');
+    resultEl.innerHTML=`<div style="font-size:13px;color:var(--text);line-height:1.9;padding:10px;background:var(--bg3);border-radius:var(--radius);">${html}</div>`;
+  }catch(e){
+    resultEl.innerHTML=`<div style="font-size:12px;color:var(--red);padding:6px;">エラー: ${e.message}</div>`;
+  }
+  btn.disabled=false;
+}
+
+// ── ② 食事アドバイス（API不使用） ──
+function getMealAdvice(data){
+  const msgs=[];
+  const d=data.date||today();
+  const todayMeals=mealHistory.filter(m=>m.date===d);
+  const tCal=Math.round(todayMeals.reduce((s,m)=>s+(m.calories||0),0));
+  const tP=Math.round(todayMeals.reduce((s,m)=>s+(m.protein||0),0));
+  const tF=Math.round(todayMeals.reduce((s,m)=>s+(m.fat||0),0));
+  const goalCal=goals.p*4+goals.f*9+goals.c*4;
+  if(goalCal>0){
+    const ratio=tCal/goalCal;
+    if(ratio>1.25) msgs.push(`⚠️ 今日のカロリーが目標の${Math.round(ratio*100)}%に達しています`);
+    else if(ratio<0.6&&todayMeals.length>=2) msgs.push(`⚠️ カロリーが目標の${Math.round(ratio*100)}%と少なめです。筋肉の維持に影響する可能性があります`);
+  }
+  if(goals.p>0&&tP<goals.p*0.6) msgs.push(`💪 タンパク質が目標の${Math.round(tP/goals.p*100)}%です。あと${goals.p-tP}g摂れると理想的`);
+  if(goals.f>0&&tF<20&&todayMeals.length>=2) msgs.push(`🥑 脂質が${tF}gと少なめです。テストステロン維持のため最低30gは摂りましょう`);
+  if(goals.f>0&&tF>goals.f*1.5) msgs.push(`🍟 脂質が目標の${Math.round(tF/goals.f*100)}%と多めです`);
+  return msgs;
 }
 
 function toggleHistDay(bodyId,chevId){
@@ -1722,6 +1870,23 @@ function renderStats(){
       <div class="metric"><div class="metric-val">${avgCal>0?avgCal:'--'}</div><div class="metric-label">平均kcal/日</div></div>
     </div>
 
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <button onclick="calPrev()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:0 8px;">‹</button>
+        <span id="cal-label" style="font-size:14px;font-weight:500;color:var(--text);font-family:'DM Mono',monospace;"></span>
+        <button onclick="calNext()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:0 8px;">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px;">
+        ${['日','月','火','水','木','金','土'].map((d,i)=>`<div style="text-align:center;font-size:11px;color:${i===0?'var(--red)':i===6?'#4a9eff':'var(--text3)'};">${d}</div>`).join('')}
+      </div>
+      <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
+      <div id="cal-legend" style="display:flex;gap:12px;margin-top:10px;padding-top:8px;border-top:0.5px solid var(--border);">
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);"><span style="width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block;"></span>トレーニング</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);"><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);opacity:0.5;display:inline-block;"></span>食事</span>
+      </div>
+    </div>
+    <div id="cal-detail" style="margin-bottom:8px;"></div>
+
     <div class="card">
       <div class="card-title">⚖️ 体重を記録</div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
@@ -1742,14 +1907,109 @@ function renderStats(){
         <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--green);display:inline-block;"></span>炭水化物</span>
       </div>
       <div class="chart-wrap"><canvas id="chartPFC" role="img" aria-label="PFC推移グラフ">PFCデータ</canvas></div></div>`:''})()}
-    ${recentDates.length?`<div class="card"><div class="card-title">🕐 最近のセッション</div>${histHTML}</div>`:''}`;
-
+    ${recentDates.length?`<div class="card"><div class="card-title">🕐 最近のセッション</div>${histHTML}</div>`:''}
+    <div class="card" style="margin-top:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="card-title" style="margin:0;">🤖 AIトレーニング分析</div>
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">記録を元に停滞・偏り・先週との比較をAIが分析します</p>
+      <div id="ai-analysis-result"></div>
+      <button onclick="runAIAnalysis()" class="btn-main" style="margin-top:8px;" id="ai-analysis-btn">🧠 分析してもらう</button>
+    </div>`;
   setTimeout(()=>{
     window._allEx=allEx;
+    renderCalendar();
     if(weightLog.length>=2&&document.getElementById('chartBW')) buildBodyWeightChart(weightLog);
     if(featEx&&document.getElementById('chartW')) buildWeightChart(featEx);
     if(new Set(mealHistory.map(m=>m.date)).size>=3&&document.getElementById('chartPFC')) buildPFCChart();
   },80);
+}
+
+// ── カレンダー ──
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
+
+function renderCalendar(){
+  const grid=document.getElementById('cal-grid');
+  const label=document.getElementById('cal-label');
+  if(!grid||!label) return;
+  label.textContent=`${calYear}年 ${calMonth+1}月`;
+  const first=new Date(calYear,calMonth,1);
+  const lastDay=new Date(calYear,calMonth+1,0).getDate();
+  const startDow=first.getDay(); // 0=日
+
+  // トレーニング・食事の日付マップ作成
+  const trainMap={};
+  trainingHistory.forEach(s=>{
+    if(!trainMap[s.date]) trainMap[s.date]=[];
+    if(s.muscleGroup) trainMap[s.date].push(s.muscleGroup);
+  });
+  const mealMap=new Set(mealHistory.map(m=>m.date));
+
+  let cells='';
+  // 空白セル
+  for(let i=0;i<startDow;i++) cells+=`<div></div>`;
+  // 日付セル
+  for(let d=1;d<=lastDay;d++){
+    const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=dateStr===today();
+    const dow=(startDow+d-1)%7;
+    const groups=trainMap[dateStr]||[];
+    const hasMeal=mealMap.has(dateStr);
+    const hasTrain=groups.length>0;
+    const dotColor=groups.length>0?(MUSCLE_COLORS[groups[0]]||'var(--gold)'):'';
+
+    cells+=`<div onclick="showCalDetail('${dateStr}')" style="
+      position:relative;height:36px;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;border-radius:5px;cursor:pointer;
+      background:${isToday?'rgba(201,168,76,0.15)':'transparent'};
+      border:${isToday?'1px solid rgba(201,168,76,0.4)':'1px solid transparent'};
+      transition:background .1s;">
+      <span style="font-size:11px;font-weight:${isToday?700:400};color:${dow===0?'var(--red)':dow===6?'#4a9eff':'var(--text)'};">${d}</span>
+      <div style="display:flex;gap:2px;margin-top:1px;min-height:5px;">
+        ${hasTrain?`<span style="width:5px;height:5px;border-radius:50%;background:var(--gold);display:inline-block;"></span>`:''}
+        ${hasMeal?`<span style="width:4px;height:4px;border-radius:50%;background:var(--blue);opacity:0.5;display:inline-block;"></span>`:''}
+      </div>
+    </div>`;
+  }
+  grid.innerHTML=cells;
+}
+
+function showCalDetail(dateStr){
+  const el=document.getElementById('cal-detail');
+  if(!el) return;
+  const sessions=trainingHistory.filter(s=>s.date===dateStr);
+  const meals=mealHistory.filter(m=>m.date===dateStr);
+  if(!sessions.length&&!meals.length){ el.innerHTML=''; return; }
+
+  let html=`<div class="card" style="border-left:3px solid var(--gold);">
+    <div style="font-size:12px;font-weight:500;color:var(--gold);margin-bottom:8px;">${dateStr}</div>`;
+
+  if(sessions.length){
+    const mergedEx=flattenMergeSessionDay(sessions);
+    html+=`<div style="margin-bottom:8px;">${buildSessionRows(mergedEx)}</div>`;
+  }
+  if(meals.length){
+    const tCal=Math.round(meals.reduce((s,m)=>s+(m.calories||0),0));
+    const tP=Math.round(meals.reduce((s,m)=>s+(m.protein||0),0));
+    html+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);">
+      <span style="font-size:12px;color:var(--text2);">🍽 ${tCal}kcal</span>
+      <span style="font-size:12px;color:var(--blue);">P ${tP}g</span>
+    </div>`;
+  }
+  html+='</div>';
+  el.innerHTML=html;
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function calPrev(){
+  calMonth--;
+  if(calMonth<0){calMonth=11;calYear--;}
+  renderCalendar();
+}
+function calNext(){
+  calMonth++;
+  if(calMonth>11){calMonth=0;calYear++;}
+  renderCalendar();
 }
 
 function updateWeightChartByFilter(){
@@ -1826,7 +2086,7 @@ function updateWeightChart(){
 }
 function buildPFCChart(){
   if(chartInstances.pfc) chartInstances.pfc.destroy();
-  const days=[]; for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10));}
+  const days=[]; for(let i=6;i>=0;i--){const d=new Date(new Date().getTime()+9*60*60*1000);d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10));}
   chartInstances.pfc=new Chart(document.getElementById('chartPFC'),{
     type:'bar',
     data:{labels:days.map(d=>d.slice(5)),datasets:[
@@ -1839,7 +2099,11 @@ function buildPFCChart(){
 }
 
 // ── Helpers ──
-function today(){ return new Date().toISOString().slice(0,10); }
+function today(){
+  const d=new Date();
+  const jst=new Date(d.getTime()+9*60*60*1000);
+  return jst.toISOString().slice(0,10);
+}
 function copyText(encoded){
   navigator.clipboard.writeText(decodeURIComponent(encoded)).then(()=>showToast('コピーしました！')).catch(()=>{
     const t=document.createElement('textarea');
