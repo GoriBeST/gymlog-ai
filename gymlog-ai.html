@@ -742,7 +742,7 @@ function renderTrainingResult(data,saved){
         <button onclick="toggleOcrEdit(${idx})" style="font-size:11px;padding:4px 10px;border-radius:20px;background:var(--bg3);color:var(--text2);border:0.5px solid var(--border2);cursor:pointer;flex-shrink:0;">✏️ 修正</button>
       </div>
       ${exHTML||'<p style="color:var(--text2);font-size:13px;">種目を検出できませんでした</p>'}
-      <div id="ocr-edit-${idx}" style="display:none;margin-top:12px;background:var(--bg3);border-radius:var(--radius);padding:12px;">
+      <div id="ocr-edit-${idx}" style="display:none;margin-top:12px;background:var(--bg3);border-radius:var(--radius);padding:12px;overflow:hidden;">
         <div style="font-size:11px;color:var(--gold);margin-bottom:10px;">種目・重量・repを修正できます</div>
         <div id="ocr-edit-rows-${idx}">
           ${(data.exercises||[]).map((e,ei)=>`
@@ -1279,11 +1279,25 @@ function removeSet(ei,si){
   selectedExercises[ei].sets.splice(si,1); renderSetsArea();
 }
 function removeExercise(ei){ selectedExercises.splice(ei,1); renderSetsArea(); renderExerciseListBtns(); }
+function resolveMuscleParts(splitMode,splitGroup,muscleGroup){
+  // PPL/上下半身の場合は含まれる部位を配列で返す
+  if(splitMode==='ppl'&&splitGroup){
+    const g=PPL_GROUPS[splitGroup];
+    return g?[splitGroup,...(g.parts||[])]:[splitGroup];
+  }
+  if(splitMode==='updown'&&splitGroup){
+    const g=UPDOWN_GROUPS[splitGroup];
+    return g?[splitGroup,...(g.parts||[])]:[splitGroup];
+  }
+  return muscleGroup?[muscleGroup]:[];
+}
 function saveManualTraining(){
   const validEx=selectedExercises.filter(e=>e.sets.some(s=>s.weight&&s.reps));
   if(!validEx.length){showToast('重量とrepを入力してください');return;}
-  const groupLabel=currentSplitMode==='muscle'?currentMuscleGroup:(currentSplitGroup||'');
-  const record={date:trainingInputDate,muscleGroup:groupLabel,
+  const parts=resolveMuscleParts(currentSplitMode,currentSplitGroup,currentMuscleGroup);
+  const groupLabel=parts[0]||'';
+  // 部位フィルター用にpartsを保存
+  const record={date:trainingInputDate,muscleGroup:groupLabel,muscleParts:parts,
     exercises:validEx.map(e=>({name:e.name,sets:e.sets.filter(s=>s.weight&&s.reps).map(s=>({weight:parseFloat(s.weight),reps:parseInt(s.reps)}))})),
     instagram_caption:generateTrainingCaption(validEx,currentMuscleGroup),savedAt:Date.now()};
   trainingHistory.push(record);
@@ -1301,58 +1315,90 @@ function generateTrainingCaption(exercises,group){
   if(group) tags.push(`#${group}トレ`);
   return `【${group||''}トレ記録】\n${lines.join(' / ')}\n\n${tags.join(' ')}`;
 }
+function renderTrainingSessionCard(s,realIdx,cardId){
+  const c=MUSCLE_COLORS[s.muscleGroup]||'var(--gold)';
+  const exRows=(s.exercises||[]).map((e,ei)=>{
+    const setStr=e.sets.map((st,si)=>`${st.weight}×${st.reps}`).join(' / ');
+    return `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:0.5px solid var(--border);">
+      <span style="font-size:13px;font-weight:500;">${e.name}</span>
+      <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);">${setStr}</span>
+    </div>`;
+  }).join('');
+  const editRows=(s.exercises||[]).map((e,ei)=>`
+    <div style="margin-bottom:10px;padding-bottom:8px;border-bottom:0.5px solid var(--border);">
+      <input value="${e.name}" id="ts-name-${realIdx}-${ei}" style="width:100%;padding:6px 8px;font-size:13px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);margin-bottom:5px;">
+      ${e.sets.map((st,si)=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="font-size:11px;color:var(--text3);width:30px;flex-shrink:0;">Set${si+1}</span>
+        <input type="number" min="0" value="${st.weight}" id="ts-w-${realIdx}-${ei}-${si}" style="flex:1;padding:5px;font-size:13px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);text-align:center;">
+        <span style="font-size:12px;color:var(--text3);">kg×</span>
+        <input type="number" min="0" value="${st.reps}" id="ts-r-${realIdx}-${ei}-${si}" style="flex:1;padding:5px;font-size:13px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);text-align:center;">
+        <span style="font-size:12px;color:var(--text3);">rep</span>
+      </div>`).join('')}
+    </div>`).join('');
+  return `<div class="card" style="border-left:3px solid ${c};margin-bottom:8px;" id="${cardId}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:12px;font-weight:700;color:${c};">${s.muscleGroup||'トレーニング'}</span>
+      <div style="display:flex;gap:6px;">
+        <button onclick="toggleSessionEdit('${cardId}-edit')" style="font-size:11px;padding:3px 8px;border-radius:20px;background:var(--bg3);color:var(--text2);border:0.5px solid var(--border2);cursor:pointer;">✏️</button>
+        <button onclick="deleteTrainingSession(${realIdx},'${cardId}')" style="font-size:11px;padding:3px 8px;border-radius:20px;background:rgba(232,85,85,0.12);color:var(--red);border:0.5px solid rgba(232,85,85,0.3);cursor:pointer;">🗑</button>
+      </div>
+    </div>
+    <div id="${cardId}-rows">${exRows}</div>
+    <div id="${cardId}-edit" style="display:none;margin-top:10px;background:var(--bg3);border-radius:var(--radius);padding:10px;">
+      <div style="font-size:11px;color:var(--gold);margin-bottom:8px;">種目・重量・repを修正</div>
+      ${editRows}
+      <button onclick="applySessionEdit(${realIdx},'${cardId}')" style="width:100%;padding:8px;background:var(--gold);color:#000;border:none;border-radius:var(--radius);font-size:13px;font-weight:700;cursor:pointer;">✓ 修正を適用</button>
+    </div>
+  </div>`;
+}
+function toggleSessionEdit(editId){
+  const el=document.getElementById(editId);
+  if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
+function applySessionEdit(realIdx,cardId){
+  const s=trainingHistory[realIdx]; if(!s) return;
+  s.exercises=s.exercises.map((e,ei)=>{
+    const name=document.getElementById('ts-name-'+realIdx+'-'+ei)?.value||e.name;
+    const sets=e.sets.map((st,si)=>({
+      weight:parseFloat(document.getElementById('ts-w-'+realIdx+'-'+ei+'-'+si)?.value)||st.weight,
+      reps:parseInt(document.getElementById('ts-r-'+realIdx+'-'+ei+'-'+si)?.value)||st.reps
+    }));
+    return {name,sets};
+  });
+  lsSet('gl-training',trainingHistory);
+  // カードの表示行を更新
+  const rowsEl=document.getElementById(cardId+'-rows');
+  if(rowsEl) rowsEl.innerHTML=s.exercises.map(e=>{
+    const setStr=e.sets.map(st=>`${st.weight}×${st.reps}`).join(' / ');
+    return `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:0.5px solid var(--border);">
+      <span style="font-size:13px;font-weight:500;">${e.name}</span>
+      <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);">${setStr}</span>
+    </div>`;
+  }).join('');
+  document.getElementById(cardId+'-edit').style.display='none';
+  showToast('修正を適用しました');
+}
 function renderTodayTrainingLog(){
   const el=document.getElementById('today-training-log');
   if(!el) return;
   const sessions=trainingHistory.filter(s=>s.date===trainingInputDate).sort((a,b)=>b.savedAt-a.savedAt);
   if(!sessions.length){el.innerHTML='';return;}
-
-  // 全種目をフラットにまとめる
-  const allEx=[];
-  sessions.forEach((s,si)=>{
+  const cards=sessions.map((s,si)=>{
     const realIdx=trainingHistory.findIndex(t=>t.savedAt===s.savedAt&&t.date===s.date);
-    (s.exercises||[]).forEach(e=>{
-      allEx.push({name:e.name,sets:e.sets,realIdx});
-    });
-  });
-
-  const totalSets=allEx.reduce((sum,e)=>sum+e.sets.length,0);
-  const totalVol=allEx.reduce((sum,e)=>sum+e.sets.reduce((s2,st)=>s2+(st.weight||0)*(st.reps||0),0),0);
-
-  // コンパクトな行形式
-  const rows=allEx.map(e=>{
-    const bestW=Math.max(...e.sets.map(s=>s.weight||0));
-    const setStr=e.sets.map((s,i)=>`${s.weight}×${s.reps}`).join(' / ');
-    return `<div style="display:flex;align-items:baseline;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border);">
-      <span style="font-size:13px;font-weight:500;color:var(--text);">${e.name}</span>
-      <span style="font-size:12px;color:var(--text2);font-family:'DM Mono',monospace;text-align:right;">${setStr}</span>
-    </div>`;
+    return renderTrainingSessionCard(s,realIdx,'today-sess-'+realIdx);
   }).join('');
-
-  // セッション削除ボタン（savedAtベース）
-  const delBtns=sessions.map((s,si)=>{
-    const realIdx=trainingHistory.findIndex(t=>t.savedAt===s.savedAt&&t.date===s.date);
-    return `<button onclick="deleteTrainingSession(${realIdx})" style="font-size:11px;padding:3px 8px;border-radius:20px;background:rgba(232,85,85,0.12);color:var(--red);border:0.5px solid rgba(232,85,85,0.3);cursor:pointer;margin-left:6px;">🗑 削除</button>`;
-  }).join('');
-
   el.innerHTML=`<div style="margin-top:16px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <div style="font-size:12px;color:var(--text2);">${trainingInputDate.slice(5).replace('-','/')} の記録</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${allEx.length}種目 ${totalSets}set</span>
-        ${delBtns}
-      </div>
-    </div>
-    <div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:10px 14px;">
-      ${rows}
-    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">${trainingInputDate.slice(5).replace('-','/')} の記録</div>
+    ${cards}
   </div>`;
 }
-function deleteTrainingSession(idx){
+function deleteTrainingSession(idx,cardId){
   if(idx<0||idx>=trainingHistory.length){showToast('削除対象が見つかりません');return;}
   if(!confirm('この記録を削除しますか？'))return;
   trainingHistory.splice(idx,1); lsSet('gl-training',trainingHistory);
-  showToast('削除しました'); renderTodayTrainingLog();
+  showToast('削除しました');
+  if(cardId){const el=document.getElementById(cardId);if(el)el.remove();}
+  renderTodayTrainingLog();
 }
 
 function buildDateSelects(dl){
@@ -1522,29 +1568,35 @@ function renderStats(){
   const maxW=allW.length?Math.max(...allW):0;
   const avgCal=mealHistory.length?Math.round(mealHistory.reduce((s,m)=>s+(m.calories||0),0)/Math.max(1,new Set(mealHistory.map(m=>m.date)).size)):0;
   // 部位フィルター対応のex選択
-  const allMuscleGroups=[...new Set(trainingHistory.map(s=>s.muscleGroup||'').filter(Boolean))];
+  // muscleParts（部位変換済み）があればそれを使い、なければmuscleGroupから
+  const allMuscleGroupsRaw=trainingHistory.flatMap(s=>s.muscleParts||[s.muscleGroup||'']).filter(Boolean);
+  const allMuscleGroups=[...new Set(allMuscleGroupsRaw)].filter(g=>Object.keys(MUSCLE_COLORS).includes(g));
   const muscleFilterSel=allMuscleGroups.length>0?`<select id="muscle-filter" onchange="updateWeightChartByFilter()" style="font-size:12px;padding:4px 8px;border-radius:6px;background:var(--bg3);color:var(--text);border:0.5px solid var(--border2);margin-left:6px;"><option value="">全部位</option>${allMuscleGroups.map(g=>`<option value="${g}">${g}</option>`).join('')}</select>`:'';
   const exSelect=exNames.length>1?`<select id="ex-select" onchange="updateWeightChart()" style="font-size:12px;padding:4px 8px;border-radius:6px;background:var(--bg3);color:var(--text);border:0.5px solid var(--border2);margin-left:6px;">${exNames.map(n=>`<option value="${n}">${n}</option>`).join('')}</select>`:'';
-  // 最近のセッション（日付のみ・折りたたみ）
-  const recentSessions=[...trainingHistory].sort((a,b)=>b.savedAt-a.savedAt).slice(0,8);
-  const histHTML=recentSessions.map((s,si)=>{
-    const exRows=(s.exercises||[]).map(e=>{
-      const sets=(e.sets||[]).map(st=>`${st.weight}×${st.reps}`).join(' / ');
-      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--border);font-size:12px;"><span style="color:var(--text);">${e.name}</span><span style="font-family:'DM Mono',monospace;color:var(--text2);">${sets}</span></div>`;
+  // 最近のセッションを日付単位にまとめる
+  const recentSessionsAll=[...trainingHistory].sort((a,b)=>b.savedAt-a.savedAt);
+  const dateMap=new Map();
+  recentSessionsAll.forEach(s=>{
+    if(!dateMap.has(s.date)) dateMap.set(s.date,[]);
+    dateMap.get(s.date).push(s);
+  });
+  const recentDates=[...dateMap.keys()].slice(0,8);
+  const histHTML=recentDates.map((date,di)=>{
+    const daySessions=dateMap.get(date);
+    const cards=daySessions.map(s=>{
+      const realIdx=trainingHistory.findIndex(t=>t.savedAt===s.savedAt&&t.date===s.date);
+      return renderTrainingSessionCard(s,realIdx,'hist-sess-'+realIdx);
     }).join('');
-    const c=MUSCLE_COLORS[s.muscleGroup]||'var(--gold)';
+    const totalEx=daySessions.reduce((sum,s)=>sum+(s.exercises||[]).length,0);
     return `<div style="border-bottom:0.5px solid var(--border);">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;cursor:pointer;" onclick="toggleSessionDetail('sess-${si}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;cursor:pointer;" onclick="toggleSessionDetail('hist-day-${di}','hist-chev-${di}')">
+        <span style="font-size:13px;font-weight:500;font-family:'DM Mono',monospace;">${date}</span>
         <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:13px;font-weight:500;font-family:'DM Mono',monospace;">${s.date||''}</span>
-          ${s.muscleGroup?`<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:${c}22;color:${c};border:0.5px solid ${c};">${s.muscleGroup}</span>`:''}
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:11px;color:var(--text3);">${(s.exercises||[]).length}種目</span>
-          <span style="font-size:12px;color:var(--text3);" id="sess-chevron-${si}">▾</span>
+          <span style="font-size:11px;color:var(--text3);">${totalEx}種目</span>
+          <span style="font-size:12px;color:var(--text3);" id="hist-chev-${di}">▾</span>
         </div>
       </div>
-      <div id="sess-${si}" style="display:none;padding-bottom:10px;">${exRows}</div>
+      <div id="hist-day-${di}" style="display:none;padding-bottom:8px;">${cards}</div>
     </div>`;
   }).join('');
 
@@ -1597,13 +1649,12 @@ function renderStats(){
   },80);
 }
 
-function toggleSessionDetail(id){
+function toggleSessionDetail(id,chevId){
   const el=document.getElementById(id);
-  const si=id.replace('sess-','');
-  const chevron=document.getElementById('sess-chevron-'+si);
   if(!el) return;
   const open=el.style.display==='none';
   el.style.display=open?'block':'none';
+  const chevron=chevId?document.getElementById(chevId):null;
   if(chevron) chevron.textContent=open?'▴':'▾';
 }
 function updateWeightChartByFilter(){
