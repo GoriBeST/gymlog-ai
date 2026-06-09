@@ -730,18 +730,69 @@ async function analyzeTraining(){
   if(btn) btn.disabled=false;
 }
 function renderTrainingResult(data,saved){
-  const exHTML=(data.exercises||[]).map(e=>{
+  const idx=trainingHistory.length-1;
+  const exHTML=(data.exercises||[]).map((e,ei)=>{
+    const sets=(e.sets||[]).map((s,si)=>`Set${si+1}: ${s.weight}kg×${s.reps}rep`).join('　');
+    return `<div class="ex-item"><div class="ex-name">${e.name}</div><div class="ex-sets">${sets}</div></div>`;
+  }).join('');
+  document.getElementById('result-training').innerHTML=`
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div class="card-title" style="margin:0;">${data.date||today()} の記録 ${saved?'<span style="font-size:11px;color:var(--green);margin-left:6px;">✓ 保存済み</span>':''}</div>
+        <button onclick="toggleOcrEdit(${idx})" style="font-size:11px;padding:4px 10px;border-radius:20px;background:var(--bg3);color:var(--text2);border:0.5px solid var(--border2);cursor:pointer;flex-shrink:0;">✏️ 修正</button>
+      </div>
+      ${exHTML||'<p style="color:var(--text2);font-size:13px;">種目を検出できませんでした</p>'}
+      <div id="ocr-edit-${idx}" style="display:none;margin-top:12px;background:var(--bg3);border-radius:var(--radius);padding:12px;">
+        <div style="font-size:11px;color:var(--gold);margin-bottom:10px;">種目・重量・repを修正できます</div>
+        <div id="ocr-edit-rows-${idx}">
+          ${(data.exercises||[]).map((e,ei)=>`
+            <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:0.5px solid var(--border);">
+              <input value="${e.name}" id="ocr-name-${idx}-${ei}" style="width:100%;padding:6px 8px;font-size:13px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);margin-bottom:6px;">
+              ${(e.sets||[]).map((s,si)=>`
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                  <span style="font-size:11px;color:var(--text3);width:30px;">Set${si+1}</span>
+                  <input type="number" value="${s.weight}" id="ocr-w-${idx}-${ei}-${si}" min="0" style="flex:1;padding:5px;font-size:13px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);text-align:center;">
+                  <span style="font-size:12px;color:var(--text3);">kg ×</span>
+                  <input type="number" value="${s.reps}" id="ocr-r-${idx}-${ei}-${si}" min="0" style="flex:1;padding:5px;font-size:13px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);text-align:center;">
+                  <span style="font-size:12px;color:var(--text3);">rep</span>
+                </div>`).join('')}
+            </div>`).join('')}
+        </div>
+        <button onclick="applyOcrEdit(${idx})" style="width:100%;padding:8px;background:var(--gold);color:#000;border:none;border-radius:var(--radius);font-size:13px;font-weight:700;cursor:pointer;">✓ 修正を適用</button>
+      </div>
+    </div>`;
+  pushInstaCard({type:'training', data});
+}
+function toggleOcrEdit(idx){
+  const el=document.getElementById('ocr-edit-'+idx);
+  if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
+function applyOcrEdit(idx){
+  const s=trainingHistory[idx]; if(!s) return;
+  const newEx=s.exercises.map((e,ei)=>{
+    const name=document.getElementById('ocr-name-'+idx+'-'+ei)?.value||e.name;
+    const sets=e.sets.map((st,si)=>({
+      weight:parseFloat(document.getElementById('ocr-w-'+idx+'-'+ei+'-'+si)?.value)||st.weight,
+      reps:parseInt(document.getElementById('ocr-r-'+idx+'-'+ei+'-'+si)?.value)||st.reps
+    }));
+    return {name,sets};
+  });
+  trainingHistory[idx].exercises=newEx;
+  lsSet('gl-training',trainingHistory);
+  document.getElementById('ocr-edit-'+idx).style.display='none';
+  // 表示更新
+  const exHTML=newEx.map(e=>{
     const sets=(e.sets||[]).map((s,i)=>`Set${i+1}: ${s.weight}kg×${s.reps}rep`).join('　');
     return `<div class="ex-item"><div class="ex-name">${e.name}</div><div class="ex-sets">${sets}</div></div>`;
   }).join('');
-  const caption=(data.instagram_caption||'').replace(/#[^\s#]+/g,'').trim();
-  const tags=(data.instagram_caption||'').match(/#[^\s#]+/g)||[];
-  document.getElementById('result-training').innerHTML=`
-    <div class="card">
-      <div class="card-title">${data.date||today()} の記録 ${saved?'<span style="font-size:11px;color:var(--green);margin-left:6px;">✓ 保存済み</span>':''}</div>
-      ${exHTML||'<p style="color:var(--text2);font-size:13px;">種目を検出できませんでした</p>'}
-    </div>`;
-  pushInstaCard({type:'training', data});
+  const card=document.querySelector('#result-training .card');
+  if(card){
+    const exArea=card.querySelectorAll('.ex-item');
+    exArea.forEach(el=>el.remove());
+    const editDiv=document.getElementById('ocr-edit-'+idx);
+    card.insertBefore(Object.assign(document.createElement('div'),{innerHTML:exHTML}),editDiv);
+  }
+  showToast('修正を適用しました');
 }
 
 // ── Meal ──
@@ -1470,11 +1521,31 @@ function renderStats(){
   const allW=trainingHistory.flatMap(s=>(s.exercises||[]).flatMap(e=>(e.sets||[]).map(st=>st.weight||0)));
   const maxW=allW.length?Math.max(...allW):0;
   const avgCal=mealHistory.length?Math.round(mealHistory.reduce((s,m)=>s+(m.calories||0),0)/Math.max(1,new Set(mealHistory.map(m=>m.date)).size)):0;
-  const exSelect=exNames.length>1?`<select id="ex-select" onchange="updateWeightChart()" style="font-size:12px;padding:4px 8px;border-radius:6px;background:var(--bg3);color:var(--text);border:0.5px solid var(--border2);margin-left:8px;">${exNames.map(n=>`<option value="${n}">${n}</option>`).join('')}</select>`:'';
-  const recentSessions=[...trainingHistory].sort((a,b)=>b.savedAt-a.savedAt).slice(0,5);
-  const histHTML=recentSessions.map(s=>{
-    const exList=(s.exercises||[]).map(e=>e.name).join('・');
-    return `<div class="history-item"><div><div style="font-size:13px;font-weight:500;">${s.date||''}</div><div style="font-size:12px;color:var(--text2);">${exList||'種目なし'}</div></div><span class="badge">${(s.exercises||[]).length}種目</span></div>`;
+  // 部位フィルター対応のex選択
+  const allMuscleGroups=[...new Set(trainingHistory.map(s=>s.muscleGroup||'').filter(Boolean))];
+  const muscleFilterSel=allMuscleGroups.length>0?`<select id="muscle-filter" onchange="updateWeightChartByFilter()" style="font-size:12px;padding:4px 8px;border-radius:6px;background:var(--bg3);color:var(--text);border:0.5px solid var(--border2);margin-left:6px;"><option value="">全部位</option>${allMuscleGroups.map(g=>`<option value="${g}">${g}</option>`).join('')}</select>`:'';
+  const exSelect=exNames.length>1?`<select id="ex-select" onchange="updateWeightChart()" style="font-size:12px;padding:4px 8px;border-radius:6px;background:var(--bg3);color:var(--text);border:0.5px solid var(--border2);margin-left:6px;">${exNames.map(n=>`<option value="${n}">${n}</option>`).join('')}</select>`:'';
+  // 最近のセッション（日付のみ・折りたたみ）
+  const recentSessions=[...trainingHistory].sort((a,b)=>b.savedAt-a.savedAt).slice(0,8);
+  const histHTML=recentSessions.map((s,si)=>{
+    const exRows=(s.exercises||[]).map(e=>{
+      const sets=(e.sets||[]).map(st=>`${st.weight}×${st.reps}`).join(' / ');
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--border);font-size:12px;"><span style="color:var(--text);">${e.name}</span><span style="font-family:'DM Mono',monospace;color:var(--text2);">${sets}</span></div>`;
+    }).join('');
+    const c=MUSCLE_COLORS[s.muscleGroup]||'var(--gold)';
+    return `<div style="border-bottom:0.5px solid var(--border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;cursor:pointer;" onclick="toggleSessionDetail('sess-${si}')">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;font-weight:500;font-family:'DM Mono',monospace;">${s.date||''}</span>
+          ${s.muscleGroup?`<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:${c}22;color:${c};border:0.5px solid ${c};">${s.muscleGroup}</span>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:11px;color:var(--text3);">${(s.exercises||[]).length}種目</span>
+          <span style="font-size:12px;color:var(--text3);" id="sess-chevron-${si}">▾</span>
+        </div>
+      </div>
+      <div id="sess-${si}" style="display:none;padding-bottom:10px;">${exRows}</div>
+    </div>`;
   }).join('');
 
   const totalW=weightLog.length;
@@ -1508,7 +1579,7 @@ function renderStats(){
     </div>
 
     ${weightLog.length>=2?`<div class="card"><div class="card-title">📉 体重の推移</div><div class="chart-wrap"><canvas id="chartBW" role="img" aria-label="体重推移グラフ">体重データ</canvas></div></div>`:''}
-    ${featEx?`<div class="card"><div class="card-title" style="display:flex;align-items:center;">📈 種目別最大重量${exSelect}</div><div class="chart-wrap"><canvas id="chartW" role="img" aria-label="重量推移グラフ">重量データ</canvas></div></div>`:''}
+    ${featEx?`<div class="card"><div class="card-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">📈 種目別最大重量${muscleFilterSel}${exSelect}</div><div class="chart-wrap"><canvas id="chartW" role="img" aria-label="重量推移グラフ">重量データ</canvas></div></div>`:''}
     ${(()=>{const uniqDays=new Set(mealHistory.map(m=>m.date)).size; return uniqDays>=3?`<div class="card"><div class="card-title">🥗 直近7日のPFC推移</div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
         <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--blue);display:inline-block;"></span>タンパク質</span>
@@ -1526,6 +1597,30 @@ function renderStats(){
   },80);
 }
 
+function toggleSessionDetail(id){
+  const el=document.getElementById(id);
+  const si=id.replace('sess-','');
+  const chevron=document.getElementById('sess-chevron-'+si);
+  if(!el) return;
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  if(chevron) chevron.textContent=open?'▴':'▾';
+}
+function updateWeightChartByFilter(){
+  const filter=document.getElementById('muscle-filter')?.value||'';
+  const filteredHistory=filter?trainingHistory.filter(s=>s.muscleGroup===filter):trainingHistory;
+  const allEx={};
+  filteredHistory.forEach(s=>(s.exercises||[]).forEach(e=>{
+    if(!allEx[e.name]) allEx[e.name]=[];
+    allEx[e.name].push({date:s.date,maxW:Math.max(...(e.sets||[]).map(st=>st.weight||0))});
+  }));
+  const names=Object.keys(allEx);
+  if(!names.length) return;
+  const exSel=document.getElementById('ex-select');
+  if(exSel) exSel.innerHTML=names.map(n=>'<option value="'+n+'">'+n+'</option>').join('');
+  window._allEx=allEx;
+  buildWeightChart(names[0]);
+}
 function deleteWeight(idx){
   const log=lsGet('gl-weight-log')||[];
   if(idx<0||idx>=log.length){ showToast('削除対象が見つかりません'); return; }
