@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>FORMA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -26,12 +26,15 @@
   --radius-lg: 16px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; overflow: hidden; }
 body {
   font-family: 'Noto Sans JP', sans-serif;
   background: var(--bg);
   background-image: radial-gradient(ellipse 100% 35% at 50% 0%, rgba(56,189,248,0.07) 0%, transparent 70%);
   color: var(--text);
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -55,6 +58,7 @@ header {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   padding-bottom: 32px;
 }
 .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
@@ -129,7 +133,7 @@ header {
   padding: 16px;
   margin-top: 12px;
 }
-.card-title { font-size: 12px; font-weight: 500; color: var(--text3); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.card-title { font-size: 12px; font-weight: 500; color: var(--text3); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.06em; text-align: center; }
 /* ── Loading / Error ── */
 .loading { text-align: center; padding: 24px; color: var(--text2); font-size: 13px; }
 .spin {
@@ -171,10 +175,10 @@ header {
 .prog-fill { height: 6px; border-radius: 20px; transition: width .5s; }
 .prog-pct { font-size: 11px; color: var(--text3); width: 32px; text-align: right; font-family: 'DM Mono', monospace; }
 /* ── Goal inputs ── */
-.goal-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.goal-row label { font-size: 13px; color: var(--text2); flex-shrink: 0; }
+.goal-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; justify-content: center; }
+.goal-row label { font-size: 13px; color: var(--text2); width: 44px; text-align: right; flex-shrink: 0; }
 .goal-row input {
-  width: 90px; padding: 7px 8px; font-size: 15px; font-weight: 600;
+  width: 86px; padding: 7px 8px; font-size: 15px; font-weight: 600;
   border-radius: var(--radius); border: 0.5px solid var(--border2);
   background: var(--bg3); color: var(--text);
   font-family: 'DM Mono', monospace; text-align: center;
@@ -434,14 +438,37 @@ input:focus {
 
     <div class="card" style="margin-top:20px;">
       <div class="card-title">目標PFC を自動計算</div>
-      <div class="goal-row"><label>身長</label><input type="number" id="calc-h" value="170" min="140" max="220" oninput="calcPFC()"><span class="unit">cm</span></div>
-      <div class="goal-row"><label>体重</label><input type="number" id="calc-w" value="70" min="40" max="150" oninput="calcPFC()"><span class="unit">kg</span></div>
-      <div class="goal-row"><label>年齢</label><input type="number" id="calc-a" value="25" min="15" max="70" oninput="calcPFC()"><span class="unit">歳</span></div>
-      <div class="goal-row">
-        <label>性別</label>
-        <div style="display:flex;gap:8px;">
-          <button class="sex-btn active" id="sex-m" onclick="setSex('m')">男性</button>
-          <button class="sex-btn" id="sex-f" onclick="setSex('f')">女性</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:0.05em;">身長</div>
+          <div style="position:relative;">
+            <input type="number" id="calc-h" value="170" min="140" max="220" oninput="calcPFC()"
+              style="width:100%;padding:8px 28px 8px 8px;font-size:18px;font-weight:700;font-family:'DM Mono',monospace;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);text-align:center;">
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text3);">cm</span>
+          </div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:0.05em;">体重</div>
+          <div style="position:relative;">
+            <input type="number" id="calc-w" value="70" min="40" max="150" oninput="calcPFC()"
+              style="width:100%;padding:8px 28px 8px 8px;font-size:18px;font-weight:700;font-family:'DM Mono',monospace;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);text-align:center;">
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text3);">kg</span>
+          </div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:0.05em;">年齢</div>
+          <div style="position:relative;">
+            <input type="number" id="calc-a" value="25" min="15" max="70" oninput="calcPFC()"
+              style="width:100%;padding:8px 28px 8px 8px;font-size:18px;font-weight:700;font-family:'DM Mono',monospace;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);text-align:center;">
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text3);">歳</span>
+          </div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:0.05em;">性別</div>
+          <div style="display:flex;gap:6px;">
+            <button class="sex-btn active" id="sex-m" onclick="setSex('m')" style="flex:1;padding:10px 4px;">男性</button>
+            <button class="sex-btn" id="sex-f" onclick="setSex('f')" style="flex:1;padding:10px 4px;">女性</button>
+          </div>
         </div>
       </div>
       <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px;letter-spacing:0.05em;text-transform:uppercase;">今週の運動量</div>
@@ -534,6 +561,8 @@ input:focus {
         <div class="calc-note" id="calc-note"></div>
       </div>
       <button class="btn-main" style="margin-top:12px;" onclick="applyPFC()">✓ この目標を設定する</button>
+      <button class="btn-sm" style="width:100%;margin-top:8px;padding:10px;" onclick="getPFCAdvice()">🧠 設定内容のアドバイスを見る</button>
+      <div id="pfc-advice" style="margin-top:10px;"></div>
     </div>
   </div>
 
@@ -710,6 +739,37 @@ function applyPFC(){
   lsSet('gl-profile',{h,w,a,sex:calcSex,mode:calcGoalMode,activity:calcActivity});
   showToast(`目標を設定しました P:${p}g F:${f}g C:${c}g`);
   refreshTodayTotals();
+}
+
+async function getPFCAdvice(){
+  const key=getKey();
+  const el=document.getElementById('pfc-advice');
+  if(!key){ el.innerHTML=`<div class="error-card"><div class="error-msg">APIキーを設定してください</div></div>`; return; }
+  const h=parseFloat(document.getElementById('calc-h').value)||170;
+  const w=parseFloat(document.getElementById('calc-w').value)||70;
+  const a=parseFloat(document.getElementById('calc-a').value)||25;
+  const sex=calcSex==='m'?'男性':'女性';
+  const mode={'bulk':'増量','maintain':'維持','cut':'減量'}[calcGoalMode];
+  const act=ACT_LABELS[calcActivity];
+  const pfc=window._calcPFC;
+  el.innerHTML=`<div class="loading"><span class="spin"></span>分析中...</div>`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:300,
+        system:'筋トレ・栄養の専門家。ユーザーのプロフィールを見て、具体的で実践的なアドバイスを日本語200文字以内で返せ。箇条書きや長い文章は避けシンプルに。',
+        messages:[{role:'user',content:`${sex}・${a}歳・身長${h}cm・体重${w}kg・目標:${mode}・活動量:${act}・目標PFC タンパク質${pfc?.p??'--'}g/脂質${pfc?.f??'--'}g/炭水化物${pfc?.c??'--'}g`}]
+      })
+    });
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'';
+    el.innerHTML=`<div style="background:rgba(56,189,248,0.05);border:0.5px solid rgba(56,189,248,0.2);border-radius:var(--radius);padding:12px;font-size:12px;color:var(--text2);line-height:1.7;border-left:2px solid var(--cyan);">${text}</div>`;
+  }catch(e){
+    el.innerHTML=`<div class="error-card"><div class="error-msg">取得失敗: ${e.message}</div></div>`;
+  }
 }
 
 // ── File select ──
@@ -1340,7 +1400,7 @@ function editTrainingDate(){
   if(old){ old.remove(); return; }
   const modal=document.createElement('div');
   modal.id='date-modal';
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;display:flex;align-items:flex-start;justify-content:center;padding:28% 20px 20px;';
   modal.innerHTML=`
     <div style="background:var(--bg2);border-radius:var(--radius-lg);padding:20px;width:100%;max-width:300px;border:0.5px solid rgba(56,189,248,0.2);" onclick="event.stopPropagation()">
       <div style="font-size:9px;color:var(--text3);letter-spacing:0.14em;font-family:'DM Mono',monospace;text-transform:uppercase;margin-bottom:10px;">記録日</div>
@@ -2037,7 +2097,7 @@ function renderGoal(){
       <div style="margin-bottom:16px;">
         <div style="font-size:10px;color:var(--text3);letter-spacing:0.06em;margin-bottom:8px;text-transform:uppercase;">達成期限</div>
         <input type="date" id="gi-date" value="${dl||''}"
-          style="width:100%;padding:10px 12px;font-size:14px;font-family:'DM Mono',monospace;background:rgba(0,0,0,0.2);border:0.5px solid rgba(255,255,255,0.1);border-radius:var(--radius);color:var(--text);text-align:center;color-scheme:dark;"
+          style="width:100%;padding:10px 12px;font-size:14px;font-family:'DM Mono',monospace;background:rgba(0,0,0,0.2);border:0.5px solid rgba(255,255,255,0.12);border-radius:var(--radius);color:var(--text);color-scheme:dark;-webkit-appearance:none;appearance:none;"
           onchange="onDateSelect()">
       </div>
 
@@ -2145,7 +2205,7 @@ function renderStats(){
         ${['日','月','火','水','木','金','土'].map((d,i)=>`<div style="text-align:center;font-size:11px;color:${i===0?'var(--red)':i===6?'#3b82f6':'var(--text3)'};">${d}</div>`).join('')}
       </div>
       <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
-      <div id="cal-legend" style="display:flex;gap:12px;margin-top:10px;padding-top:8px;border-top:0.5px solid var(--border);">
+      <div id="cal-legend" style="display:flex;gap:12px;margin-top:10px;padding-top:8px;border-top:0.5px solid var(--border);justify-content:center;">
         <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);"><span style="width:6px;height:6px;border-radius:50%;background:var(--cyan);display:inline-block;"></span>トレーニング</span>
         <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);"><span style="width:5px;height:5px;border-radius:50%;background:var(--blue);opacity:0.5;display:inline-block;"></span>食事</span>
       </div>
