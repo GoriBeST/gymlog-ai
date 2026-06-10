@@ -891,7 +891,15 @@ function resetAfterAnalysis(type){
 // ── Tab ──
 // ── インターバルタイマー ──
 let _timerTotal=90,_timerRemaining=90,_timerRunning=false,_timerTick=null;
+let _audioCtx=null;
 const _TIMER_CIRC=201.1; // 2π×32
+
+function _unlockAudio(){
+  try{
+    if(!_audioCtx) _audioCtx=new AudioContext();
+    if(_audioCtx.state==='suspended') _audioCtx.resume();
+  }catch(e){}
+}
 function setTimerDuration(secs){
   resetTimer(); _timerTotal=secs; _timerRemaining=secs;
   document.querySelectorAll('.timer-preset').forEach(b=>{
@@ -906,6 +914,11 @@ function setTimerDuration(secs){
 }
 function toggleTimer(){ _timerRunning?pauseTimer():startTimer(); }
 function startTimer(){
+  _unlockAudio(); // iOSはユーザー操作時に初期化必須
+  // 通知権限をリクエスト
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission();
+  }
   if(_timerRemaining<=0) _timerRemaining=_timerTotal;
   _timerRunning=true;
   _timerTick=setInterval(()=>{
@@ -927,23 +940,34 @@ function updateTimerUI(){
   const warn=_timerRemaining<=10&&_timerRunning;
   if(ring){ ring.style.strokeDashoffset=_TIMER_CIRC*(1-pct); ring.style.stroke=warn?'var(--amber)':_timerRunning?'var(--cyan)':'var(--text3)'; }
   if(disp) disp.style.color=warn?'var(--amber)':_timerRunning?'var(--cyan)':'var(--text)';
-  if(btn){ btn.textContent=_timerRunning?'⏸ PAUSE':(_timerRemaining>0&&_timerRemaining<_timerTotal?'▶ RESUME':'▶ START'); btn.style.background=_timerRunning?'var(--text3)':'var(--cyan)'; }
+  if(btn){
+    btn.textContent=_timerRunning?'PAUSE':(_timerRemaining>0&&_timerRemaining<_timerTotal?'RESUME':'START');
+    btn.style.background=_timerRunning?'rgba(255,255,255,0.12)':'var(--cyan)';
+    btn.style.color=_timerRunning?'var(--text)':'#000';
+  }
 }
 function onTimerDone(){
+  // バイブ
   if(navigator.vibrate) navigator.vibrate([400,100,400,100,400]);
+  // 音（iOSでも鳴るよう既存のAudioContextを使用）
   try{
-    const ctx=new AudioContext();
+    const ctx=_audioCtx||new AudioContext();
     [[880,0],[1100,.35],[880,.65]].forEach(([freq,t])=>{
       const o=ctx.createOscillator(),g=ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
       o.frequency.value=freq;
-      g.gain.setValueAtTime(0.25,ctx.currentTime+t);
+      g.gain.setValueAtTime(0.3,ctx.currentTime+t);
       g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+t+0.3);
       o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+0.35);
     });
   }catch(e){}
+  // ブラウザ通知（Android/デスクトップのみ。iOSはPWA化が必要）
+  if('Notification' in window && Notification.permission==='granted'){
+    new Notification('FORMA — インターバル終了', {body:'次のセットへ！'});
+  }
+  // カード点滅
   const card=document.getElementById('timer-card');
-  if(card){ let n=0; const fl=setInterval(()=>{ card.style.boxShadow=n%2?'':'0 0 0 2px var(--cyan)'; if(++n>5){clearInterval(fl);card.style.boxShadow='';} },200); }
+  if(card){ let n=0; const fl=setInterval(()=>{ card.style.boxShadow=n%2?'':'0 0 0 2px var(--cyan),0 0 16px rgba(56,189,248,0.3)'; if(++n>5){clearInterval(fl);card.style.boxShadow='';} },200); }
 }
 
 const TAB_ORDER=['training','meal','goal','stats','insta'];
