@@ -1827,7 +1827,16 @@ function saveManualTraining(){
   const groupLabel=parts[0]||'';
   // 部位フィルター用にpartsを保存
   const record={date:trainingInputDate,muscleGroup:groupLabel,muscleParts:parts,
-    exercises:validEx.map(e=>({name:e.name,sets:e.sets.filter(s=>s.weight&&s.reps).map(s=>({weight:parseFloat(s.weight),reps:parseInt(s.reps)}))})),
+    exercises:validEx.map(e=>({
+      name:e.name, isCardio:e.isCardio||false, sub:e.sub||'',
+      sets:e.sets
+        .filter(s=>e.isCardio ? s.weight : (s.weight&&s.reps))
+        .map(s=>({
+          weight:parseFloat(s.weight)||0,
+          reps:parseFloat(s.reps)||0,
+          ...(s.extra!==undefined&&s.extra!==''?{extra:parseFloat(s.extra)||0}:{})
+        }))
+    })),
     instagram_caption:generateTrainingCaption(validEx,currentMuscleGroup),savedAt:Date.now()};
   trainingHistory.push(record);
   lsSet('gl-training',trainingHistory);
@@ -2374,10 +2383,11 @@ function renderCalendar(){
   const startDow=first.getDay(); // 0=日
 
   // トレーニング・食事の日付マップ作成
+  const trainDates=new Set(trainingHistory.map(s=>s.date));
   const trainMap={};
   trainingHistory.forEach(s=>{
     if(!trainMap[s.date]) trainMap[s.date]=[];
-    if(s.muscleGroup) trainMap[s.date].push(s.muscleGroup);
+    trainMap[s.date].push(s.muscleGroup||'その他');
   });
   const mealMap=new Set(mealHistory.map(m=>m.date));
 
@@ -2391,7 +2401,7 @@ function renderCalendar(){
     const dow=(startDow+d-1)%7;
     const groups=trainMap[dateStr]||[];
     const hasMeal=mealMap.has(dateStr);
-    const hasTrain=groups.length>0;
+    const hasTrain=trainDates.has(dateStr);
     const dotColor=groups.length>0?(MUSCLE_COLORS[groups[0]]||'var(--cyan)'):'';
 
     cells+=`<div onclick="showCalDetail('${dateStr}')" style="
