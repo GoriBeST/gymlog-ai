@@ -7,6 +7,8 @@
 > [!NOTE]
 > 現在 **beta** 版です。UIや機能は頻繁に更新・修正が入ります。最新の `forma.html` に差し替えることでアップデートできます。データは `localStorage` に保存されるため、ファイルを差し替えても記録は引き継がれます。
 
+## スクリーンショット
+<img src="screenshots/training.png" width="230"> <img src="screenshots/meal.png" width="230"> <img src="screenshots/goal.png" width="230"> <img src="screenshots/record.png" width="230"> 
 ---
 
 ## セットアップ
