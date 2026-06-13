@@ -2360,6 +2360,18 @@ function renderStats(){
       <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">記録を元に停滞・偏り・先週との比較をAIが分析します</p>
       <div id="ai-analysis-result"></div>
       <button onclick="runAIAnalysis()" class="btn-main" style="margin-top:8px;" id="ai-analysis-btn">🧠 分析してもらう</button>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">DATA BACKUP</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.7;">ファイルを更新する前にバックアップを取ってください。インポートで記録を復元できます。</p>
+      <div style="display:flex;gap:8px;">
+        <button onclick="exportData()" style="flex:1;padding:10px;border-radius:var(--radius);background:var(--cyan);color:#000;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:0.04em;">EXPORT</button>
+        <label style="flex:1;padding:10px;border-radius:var(--radius);background:var(--bg3);color:var(--text2);border:0.5px solid var(--border2);font-size:13px;cursor:pointer;text-align:center;font-family:'DM Mono',monospace;letter-spacing:0.04em;display:flex;align-items:center;justify-content:center;">
+          IMPORT
+          <input type="file" accept=".json" onchange="importData(this)" style="display:none;">
+        </label>
+      </div>
     </div>`;
   setTimeout(()=>{
     window._allEx=allEx;
@@ -2473,6 +2485,51 @@ function updateWeightChartByFilter(){
   window._allEx=allEx;
   buildWeightChart(names[0]);
 }
+// ── データバックアップ ──
+function exportData(){
+  const data={
+    version:1,
+    exportedAt:new Date().toISOString(),
+    training:    lsGet('gl-training')         ||[],
+    meals:       lsGet('gl-meals')            ||[],
+    goals:       lsGet('gl-goals')            ||{},
+    profile:     lsGet('gl-profile')          ||{},
+    goalSetting: lsGet('gl-goal-setting')     ||{},
+    weightLog:   lsGet('gl-weight-log')       ||[],
+    customExercises: lsGet('gl-custom-exercises')||[],
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`forma-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('バックアップを保存しました');
+}
+function importData(input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(d.training)         lsSet('gl-training',         d.training);
+      if(d.meals)            lsSet('gl-meals',             d.meals);
+      if(d.goals)            lsSet('gl-goals',             d.goals);
+      if(d.profile)          lsSet('gl-profile',           d.profile);
+      if(d.goalSetting)      lsSet('gl-goal-setting',      d.goalSetting);
+      if(d.weightLog)        lsSet('gl-weight-log',        d.weightLog);
+      if(d.customExercises)  lsSet('gl-custom-exercises',  d.customExercises);
+      loadAll();
+      showToast(`復元完了 — トレーニング${(d.training||[]).length}件・食事${(d.meals||[]).length}件`);
+    }catch(err){
+      showToast('読み込み失敗：正しいバックアップファイルか確認してください');
+    }
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+
 function deleteWeight(idx){
   const log=lsGet('gl-weight-log')||[];
   if(idx<0||idx>=log.length){ showToast('削除対象が見つかりません'); return; }
